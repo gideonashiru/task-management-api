@@ -15,13 +15,6 @@ A modern REST API for managing projects, tasks, and team collaboration. Built wi
 | **Validation** | Spring Validation | Jakarta Bean Validation |
 | **Utilities** | Lombok | Latest |
 
-## System Requirements
-
-- **Java 25** (OpenJDK or Oracle JDK)
-- **PostgreSQL 12** or higher
-- **Gradle 8.x** (or use provided Gradle Wrapper)
-- **4GB RAM** minimum
-- **500MB** disk space
 
 ## Project Setup
 
