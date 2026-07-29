@@ -159,7 +159,8 @@ public class ProjectService {
         return true; // ← IMPORTANT: Return Boolean, not null
     }
 
-    public List<User> getProjectMembers(UUID projectId, User requestingUser) {
+    
+public List<User> getProjectMembers(UUID projectId, User requestingUser) {
 
         projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));

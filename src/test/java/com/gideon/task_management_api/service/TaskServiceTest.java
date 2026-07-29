@@ -8,7 +8,6 @@ import com.gideon.task_management_api.entity.Task;
 import com.gideon.task_management_api.entity.TaskStatus;
 import com.gideon.task_management_api.repository.ProjectRepository;
 import com.gideon.task_management_api.repository.ProjectMembershipRepository;
-import com.gideon.task_management_api.repository.UserRepository;
 import com.gideon.task_management_api.repository.TaskRepository;
 
 import org.junit.jupiter.api.Test;
@@ -17,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -253,19 +253,77 @@ public class TaskServiceTest {
 
         // Arrange
         UUID taskId = UUID.randomUUID();
-        User requester = User.builder().id(UUID.randomUUID()).build();
+        User requestingUser = User.builder().id(UUID.randomUUID()).build();
         Project project = Project.builder().id(UUID.randomUUID()).build();
-        Task task = Task.builder().id(taskId).project(project).assignee(requester).status(TaskStatus.IN_PROGRESS)
+        Task task = Task.builder().id(taskId).project(project).assignee(requestingUser).status(TaskStatus.IN_PROGRESS)
                 .build();
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(taskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         // Act
-        Task result = taskService.updateTaskStatus(taskId, requester);
+        Task result = taskService.updateTaskStatus(taskId, requestingUser);
         // Assert
         assertNotNull(result);
         assertEquals(TaskStatus.DONE, result.getStatus());
     }
 
+    // get tasks by project
 
-    //get tasks by project
+    @Test
+    void getTasksByProject_shouldThrowException_whenProjectDoesNotExist() {
+        // Arrange
+        UUID projectId = UUID.randomUUID();
+        User requestingUser = User.builder().id(UUID.randomUUID()).build();
+        when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            taskService.getTasksByProject(projectId, requestingUser);
+        });
+    }
+
+    @Test
+    void getTasksByProject_shouldThrowException_whenRequesterIsNotProjectMember() {
+        // Arrange
+        UUID projectId = UUID.randomUUID();
+        User requestingUser = User.builder().id(UUID.randomUUID()).build();
+        Project project = Project.builder().id(projectId).build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectMembershipRepository.findByProjectIdAndMemberId(projectId, requestingUser.getId()))
+                .thenReturn(Optional.empty());
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> {
+            taskService.getTasksByProject(projectId, requestingUser);
+        });
+
+        verify(taskRepository, never()).findByProjectId(any());
+    }
+
+    @Test
+    void getTasksByProject_shouldReturnTasks_whenAllConditionsAreMet() {
+        // Arrange
+        UUID projectId = UUID.randomUUID();
+        User requestingUser = User.builder().id(UUID.randomUUID()).build();
+        Project project = Project.builder().id(projectId).build();
+        Task task1 = Task.builder().id(UUID.randomUUID()).project(project).build();
+        Task task2 = Task.builder().id(UUID.randomUUID()).project(project).build();
+
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(taskRepository.findByProjectId(projectId)).thenReturn(List.of(task1, task2));
+        when(projectMembershipRepository.findByProjectIdAndMemberId(projectId, requestingUser.getId()))
+                .thenReturn(Optional.of(ProjectMembership.builder()
+                        .project(project)
+                        .member(requestingUser)
+                        .role(ProjectRole.MEMBER)
+                        .build()));
+
+        // Act
+        List<Task> result = taskService.getTasksByProject(projectId, requestingUser);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertTrue(result.contains(task1));
+        assertTrue(result.contains(task2));
+    }
 }

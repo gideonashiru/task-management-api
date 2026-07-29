@@ -1,5 +1,6 @@
 package com.gideon.task_management_api.service;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -71,5 +72,15 @@ public class TaskService {
 
         task.setStatus(TaskStatus.DONE);
         return taskRepository.save(task);
+    }
+
+    public List<Task> getTasksByProject(UUID projectId, User requester) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+
+        projectMembershipRepository.findByProjectIdAndMemberId(projectId, requester.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Requester must be a member of the project"));
+
+        return taskRepository.findByProjectId(project.getId());
     }
 }
