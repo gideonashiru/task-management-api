@@ -1,5 +1,7 @@
 package com.gideon.task_management_api.service;
 
+import com.gideon.task_management_api.dataTransfer.MemberResponse;
+import com.gideon.task_management_api.dataTransfer.ProjectResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.ProjectMembership;
 import com.gideon.task_management_api.entity.User;
@@ -24,7 +26,7 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final ProjectMembershipRepository projectMembershipRepository;
 
-    public Project createProject(User owner, String name, String description) {
+    public ProjectResponse createProject(User owner, String name, String description) {
         if (owner == null) {
             throw new IllegalArgumentException("Owner cannot be null");
         }
@@ -51,10 +53,10 @@ public class ProjectService {
 
         projectMembershipRepository.save(ownerMembership);
 
-        return savedProject;
+        return ProjectResponse.from(savedProject);
     }
 
-    public Project getProjectById(UUID projectId, User requestingUser) {
+    public ProjectResponse getProjectById(UUID projectId, User requestingUser) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
@@ -63,10 +65,10 @@ public class ProjectService {
             throw new IllegalArgumentException("Access denied");
         }
 
-        return project;
+        return ProjectResponse.from(project);
     }
 
-    public Project updateProject(UUID projectId, User requestingUser, String name, String description) {
+    public ProjectResponse updateProject(UUID projectId, User requestingUser, String name, String description) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
@@ -84,7 +86,7 @@ public class ProjectService {
             project.setDescription(description);
         }
 
-        return projectRepository.save(project);
+        return ProjectResponse.from(projectRepository.save(project));
     }
 
     public void deleteProject(UUID projectId, User requestingUser) {
@@ -160,7 +162,7 @@ public class ProjectService {
     }
 
     
-public List<User> getProjectMembers(UUID projectId, User requestingUser) {
+public List<MemberResponse> getProjectMembers(UUID projectId, User requestingUser) {
 
         projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
@@ -170,7 +172,7 @@ public List<User> getProjectMembers(UUID projectId, User requestingUser) {
                 .orElseThrow(() -> new IllegalArgumentException("Access denied"));
 
         return projectMembershipRepository.findByProjectId(projectId).stream()
-                .map(ProjectMembership::getMember)
+                .map(MemberResponse::from)
                 .collect(Collectors.toList());
     }
 

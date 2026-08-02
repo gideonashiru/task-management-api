@@ -1,5 +1,6 @@
 package com.gideon.task_management_api.service;
 
+import com.gideon.task_management_api.dataTransfer.TaskResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.User;
 import com.gideon.task_management_api.entity.ProjectMembership;
@@ -82,13 +83,13 @@ public class TaskServiceTest {
         when(taskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        Task result = taskService.createTask(projectId, "Task Name", "Task Description", creator);
+        TaskResponse result = taskService.createTask(projectId, "Task Name", "Task Description", creator);
 
         // Assert
         assertNotNull(result);
-        assertEquals("Task Name", result.getTitle());
-        assertEquals("Task Description", result.getDescription());
-        assertEquals(project, result.getProject());
+        assertEquals("Task Name", result.title());
+        assertEquals("Task Description", result.description());
+        assertEquals(projectId, result.projectId());
     }
 
     // assign task test cases
@@ -189,11 +190,11 @@ public class TaskServiceTest {
                         .build()));
         when(taskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         // Act
-        Task result = taskService.assignTask(taskId, assignee);
+        TaskResponse result = taskService.assignTask(taskId, assignee);
         // Assert
         assertNotNull(result);
-        assertEquals(assignee, result.getAssignee());
-        assertTrue(result.getStatus() == TaskStatus.IN_PROGRESS);
+        assertEquals(assignee.getId(), result.assigneeId());
+        assertEquals(TaskStatus.IN_PROGRESS, result.status());
     }
 
     // update task status
@@ -260,10 +261,10 @@ public class TaskServiceTest {
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(taskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         // Act
-        Task result = taskService.updateTaskStatus(taskId, requestingUser);
+        TaskResponse result = taskService.updateTaskStatus(taskId, requestingUser);
         // Assert
         assertNotNull(result);
-        assertEquals(TaskStatus.DONE, result.getStatus());
+        assertEquals(TaskStatus.DONE, result.status());
     }
 
     // get tasks by project
@@ -318,12 +319,12 @@ public class TaskServiceTest {
                         .build()));
 
         // Act
-        List<Task> result = taskService.getTasksByProject(projectId, requestingUser);
+        List<TaskResponse> result = taskService.getTasksByProject(projectId, requestingUser);
 
         // Assert
         assertNotNull(result);
         assertEquals(2, result.size());
-        assertTrue(result.contains(task1));
-        assertTrue(result.contains(task2));
+        assertTrue(result.stream().anyMatch(task -> task.id().equals(task1.getId())));
+        assertTrue(result.stream().anyMatch(task -> task.id().equals(task2.getId())));
     }
 }

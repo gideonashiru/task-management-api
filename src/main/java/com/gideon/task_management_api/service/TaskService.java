@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.gideon.task_management_api.dataTransfer.TaskResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.Task;
 import com.gideon.task_management_api.entity.TaskStatus;
@@ -23,7 +24,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final ProjectMembershipRepository projectMembershipRepository;
 
-    public Task createTask(UUID projectId, String title, String description, User creator) {
+    public TaskResponse createTask(UUID projectId, String title, String description, User creator) {
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
@@ -37,10 +38,10 @@ public class TaskService {
                 .description(description)
                 .build();
 
-        return taskRepository.save(task);
+        return TaskResponse.from(taskRepository.save(task));
     }
 
-    public Task assignTask(UUID taskId, User assignee) {
+    public TaskResponse assignTask(UUID taskId, User assignee) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found"));
 
@@ -54,11 +55,11 @@ public class TaskService {
         task.setAssignee(assignee);
         task.setStatus(TaskStatus.IN_PROGRESS);
 
-        return taskRepository.save(task);
+        return TaskResponse.from(taskRepository.save(task));
     }
 
     // updates to done, only
-    public Task updateTaskStatus(UUID taskId, User requester) {
+    public TaskResponse  updateTaskStatus(UUID taskId, User requester) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found"));
 
@@ -71,16 +72,18 @@ public class TaskService {
         }
 
         task.setStatus(TaskStatus.DONE);
-        return taskRepository.save(task);
+        return TaskResponse.from(taskRepository.save(task));
     }
 
-    public List<Task> getTasksByProject(UUID projectId, User requester) {
+    public List<TaskResponse> getTasksByProject(UUID projectId, User requester) {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found"));
 
         projectMembershipRepository.findByProjectIdAndMemberId(projectId, requester.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Requester must be a member of the project"));
 
-        return taskRepository.findByProjectId(project.getId());
+        return taskRepository.findByProjectId(project.getId()).stream()
+                .map(TaskResponse::from)
+                .toList();
     }
 }

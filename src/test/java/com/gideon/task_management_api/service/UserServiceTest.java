@@ -1,5 +1,6 @@
 package com.gideon.task_management_api.service;
 
+import com.gideon.task_management_api.dataTransfer.AuthResponse;
 import com.gideon.task_management_api.entity.User;
 import com.gideon.task_management_api.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -60,10 +61,10 @@ class UserServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(newUser);
         
         // Act
-        User result = userService.register("gideon", "password123", "Gideon");
-        assertEquals("gideon", result.getUsername());
+        AuthResponse result = userService.register("gideon", "password123", "Gideon");
+        assertEquals("gideon", result.username());
         assertEquals("hashedpassword", result.getPasswordHash());
-        assertEquals("Gideon", result.getName());
+        assertEquals("Gideon", result.name());
         verify(userRepository, times(1)).save(any(User.class));
     }
 
@@ -105,7 +106,7 @@ class UserServiceTest {
         when(userRepository.findByUsername("gideon")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correctPassword", "storedHash")).thenReturn(true);
 
-        User result = userService.login("gideon", "correctPassword");
+        AuthResponse result = userService.login("gideon", "correctPassword");
 
         assertSame(user, result);
         verify(passwordEncoder).matches("correctPassword", "storedHash");

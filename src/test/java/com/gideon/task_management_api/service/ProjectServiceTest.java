@@ -1,5 +1,7 @@
 package com.gideon.task_management_api.service;
 
+import com.gideon.task_management_api.dataTransfer.MemberResponse;
+import com.gideon.task_management_api.dataTransfer.ProjectResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.User;
 import com.gideon.task_management_api.entity.ProjectMembership;
@@ -75,13 +77,14 @@ class ProjectServiceTest {
         when(projectMembershipRepository.save(any(ProjectMembership.class))).thenReturn(membership);
 
         // Act
-        Project result = projectService.createProject(owner, "Test Project", "Test Description");
+        ProjectResponse result = projectService.createProject(owner, "Test Project", "Test Description");
 
         // Assert
-        assertEquals(projectId, result.getId());
-        assertEquals("Test Project", result.getName());
-        assertEquals("Test Description", result.getDescription());
-        assertEquals(owner, result.getOwner());
+        assertEquals(projectId, result.id());
+        assertEquals("Test Project", result.name());
+        assertEquals("Test Description", result.description());
+        assertEquals(owner.getId(), result.ownerId());
+        assertEquals(owner.getUsername(), result.ownerUsername());
         verify(projectRepository, times(1)).save(any(Project.class));
     }
 
@@ -105,10 +108,10 @@ class ProjectServiceTest {
                         .build()));
 
         // Act
-        Project result = projectService.getProjectById(projectId, projectMember);
+        ProjectResponse result = projectService.getProjectById(projectId, projectMember);
 
         // Assert
-        assertEquals(projectId, result.getId());
+        assertEquals(projectId, result.id());
         verify(projectRepository).findById(projectId);
     }
 
@@ -210,11 +213,11 @@ class ProjectServiceTest {
                         .build()));
 
         // Act
-        Project result = projectService.updateProject(projectId, owner, "New Name", "New Description");
+        ProjectResponse result = projectService.updateProject(projectId, owner, "New Name", "New Description");
 
         // Assert
-        assertEquals("New Name", result.getName());
-        assertEquals("New Description", result.getDescription());
+        assertEquals("New Name", result.name());
+        assertEquals("New Description", result.description());
         verify(projectRepository).findById(projectId);
         verify(projectRepository).save(any(Project.class));
     }
@@ -680,12 +683,12 @@ class ProjectServiceTest {
                                 .role(ProjectRole.MEMBER).build()));
 
         // Act
-        List<User> result = projectService.getProjectMembers(projectId, requestingUser);
+        List<MemberResponse> result = projectService.getProjectMembers(projectId, requestingUser);
 
         // Assert
         assertEquals(2, result.size());
-        assertTrue(result.contains(member1));
-        assertTrue(result.contains(member2));
+        assertTrue(result.stream().anyMatch(member -> member.id().equals(member1.getId())));
+        assertTrue(result.stream().anyMatch(member -> member.id().equals(member2.getId())));
         verify(projectRepository).findById(projectId);
         verify(projectMembershipRepository).findByProjectIdAndMemberId(projectId, requestingUser.getId());
         verify(projectMembershipRepository).findByProjectId(projectId);
