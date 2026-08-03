@@ -3,6 +3,7 @@ package com.gideon.task_management_api.service;
 import com.gideon.task_management_api.dataTransfer.AuthResponse;
 import com.gideon.task_management_api.entity.User;
 import com.gideon.task_management_api.repository.UserRepository;
+import com.gideon.task_management_api.security.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,6 +27,9 @@ class UserServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private JwtUtil jwtUtil;
 
     @Test
     void register_shouldThrowException_whenUsernameAlreadyExists() {
@@ -59,13 +63,16 @@ class UserServiceTest {
         when(passwordEncoder.encode("password123")).thenReturn("hashedpassword");
         when(userRepository.findByUsername("gideon")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(newUser);
-        
+        when(jwtUtil.generateToken(any(User.class))).thenReturn("test-token");
+
         // Act
         AuthResponse result = userService.register("gideon", "password123", "Gideon");
+
+        assertEquals("test-token", result.token());
         assertEquals("gideon", result.username());
-        assertEquals("hashedpassword", result.getPasswordHash());
         assertEquals("Gideon", result.name());
         verify(userRepository, times(1)).save(any(User.class));
+        verify(jwtUtil).generateToken(newUser);
     }
 
     @Test
@@ -105,10 +112,14 @@ class UserServiceTest {
                 .build();
         when(userRepository.findByUsername("gideon")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("correctPassword", "storedHash")).thenReturn(true);
+        when(jwtUtil.generateToken(user)).thenReturn("test-token");
 
         AuthResponse result = userService.login("gideon", "correctPassword");
 
-        assertSame(user, result);
+        assertEquals("test-token", result.token());
+        assertEquals("gideon", result.username());
+        assertEquals("Gideon", result.name());
         verify(passwordEncoder).matches("correctPassword", "storedHash");
+        verify(jwtUtil).generateToken(user);
     }
 }

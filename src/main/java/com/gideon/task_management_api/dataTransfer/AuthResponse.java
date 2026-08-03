@@ -20,8 +20,5 @@ public record AuthResponse(
                                 user.getName());
         }
 
-        public @Nullable Object getPasswordHash() {
-                // TODO Auto-generated method stub
-                throw new UnsupportedOperationException("Unimplemented method 'getPasswordHash'");
-        }
+ 
 }
