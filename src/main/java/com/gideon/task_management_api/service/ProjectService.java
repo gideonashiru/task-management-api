@@ -1,21 +1,26 @@
 package com.gideon.task_management_api.service;
 
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.gideon.task_management_api.dataTransfer.MemberResponse;
 import com.gideon.task_management_api.dataTransfer.ProjectResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.ProjectMembership;
-import com.gideon.task_management_api.entity.User;
 import com.gideon.task_management_api.entity.ProjectRole;
+import com.gideon.task_management_api.entity.User;
+import com.gideon.task_management_api.exception.DuplicateResourceException;
+import com.gideon.task_management_api.exception.ForbiddenException;
+import com.gideon.task_management_api.exception.ResourceNotFoundException;
+import com.gideon.task_management_api.repository.ProjectMembershipRepository;
 import com.gideon.task_management_api.repository.ProjectRepository;
 import com.gideon.task_management_api.repository.UserRepository;
-import com.gideon.task_management_api.repository.ProjectMembershipRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @Transactional
@@ -27,24 +32,15 @@ public class ProjectService {
     private final ProjectMembershipRepository projectMembershipRepository;
 
     public ProjectResponse createProject(User owner, String name, String description) {
-        if (owner == null) {
-            throw new IllegalArgumentException("Owner cannot be null");
-        }
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Project name cannot be empty");
-        }
 
-        // Create the project entity
         Project project = Project.builder()
                 .owner(owner)
                 .name(name.trim())
                 .description(description)
                 .build();
 
-        // Save the project and get the persisted entity (with ID, etc.)
         Project savedProject = projectRepository.save(project);
 
-        // Create and save the owner's mandatory membership record
         ProjectMembership ownerMembership = ProjectMembership.builder()
                 .project(savedProject)
                 .member(owner)
@@ -58,11 +54,10 @@ public class ProjectService {
 
     public ProjectResponse getProjectById(UUID projectId, User requestingUser) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
-        if (!projectMembershipRepository.findByProjectIdAndMemberId(projectId,
-                requestingUser.getId()).isPresent()) {
-            throw new IllegalArgumentException("Access denied");
+        if (projectMembershipRepository.findByProjectIdAndMemberId(projectId, requestingUser.getId()).isEmpty()) {
+            throw new ForbiddenException("Access denied");
         }
 
         return ProjectResponse.from(project);
@@ -70,14 +65,14 @@ public class ProjectService {
 
     public ProjectResponse updateProject(UUID projectId, User requestingUser, String name, String description) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         ProjectMembership membership = projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, requestingUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Access denied"));
+                .orElseThrow(() -> new ForbiddenException("Access denied"));
 
         if (membership.getRole() != ProjectRole.OWNER) {
-            throw new IllegalArgumentException("Access denied");
+            throw new ForbiddenException("Access denied");
         }
         if (name != null && !name.trim().isEmpty()) {
             project.setName(name.trim());
@@ -92,14 +87,14 @@ public class ProjectService {
     public void deleteProject(UUID projectId, User requestingUser) {
 
         projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         ProjectMembership membership = projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, requestingUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Access denied"));
+                .orElseThrow(() -> new ForbiddenException("Access denied"));
 
         if (membership.getRole() != ProjectRole.OWNER) {
-            throw new IllegalArgumentException("Access denied");
+            throw new ForbiddenException("Access denied");
         }
 
         projectRepository.deleteById(projectId);
@@ -107,21 +102,21 @@ public class ProjectService {
 
     public void addMember(UUID projectId, User requestingUser, String newMemberUsername) {
         Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         ProjectMembership membership = projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, requestingUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Access denied"));
+                .orElseThrow(() -> new ForbiddenException("Access denied"));
 
         if (membership.getRole() != ProjectRole.OWNER) {
-            throw new IllegalArgumentException("Access denied");
+            throw new ForbiddenException("Access denied");
         }
 
         User newMember = userRepository.findByUsername(newMemberUsername)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (projectMembershipRepository.existsByProjectIdAndMemberId(projectId, newMember.getId())) {
-            throw new IllegalArgumentException("User is already a member of this project");
+            throw new DuplicateResourceException("User is already a member of this project");
         }
 
         ProjectMembership newMembership = ProjectMembership.builder()
@@ -136,40 +131,35 @@ public class ProjectService {
     public Boolean removeMember(UUID projectId, User requestingUser, String memberUsername) {
 
         projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
-        // 2. Check if requesting user is owner
         ProjectMembership ownerMembership = projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, requestingUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("User is not a member of this project"));
+                .orElseThrow(() -> new ForbiddenException("User is not a member of this project"));
 
         if (ownerMembership.getRole() != ProjectRole.OWNER) {
-            throw new IllegalArgumentException("Only project owners can remove members");
+            throw new ForbiddenException("Only project owners can remove members");
         }
 
-        // 3. Check if member exists
         User memberToRemove = userRepository.findByUsername(memberUsername)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // 4. Check if member is in project
         ProjectMembership membershipToRemove = projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, memberToRemove.getId())
-                .orElseThrow(() -> new IllegalArgumentException("User is not a member of this project"));
+                .orElseThrow(() -> new ResourceNotFoundException("User is not a member of this project"));
 
-        // 5. Delete the membership
         projectMembershipRepository.delete(membershipToRemove);
-        return true; // ← IMPORTANT: Return Boolean, not null
+        return true;
     }
 
-    
-public List<MemberResponse> getProjectMembers(UUID projectId, User requestingUser) {
+    public List<MemberResponse> getProjectMembers(UUID projectId, User requestingUser) {
 
         projectRepository.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("Project not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         projectMembershipRepository
                 .findByProjectIdAndMemberId(projectId, requestingUser.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Access denied"));
+                .orElseThrow(() -> new ForbiddenException("Access denied"));
 
         return projectMembershipRepository.findByProjectId(projectId).stream()
                 .map(MemberResponse::from)

@@ -2,8 +2,6 @@ package com.gideon.task_management_api.dataTransfer;
 
 import java.util.UUID;
 
-import org.jspecify.annotations.Nullable;
-
 import com.gideon.task_management_api.entity.User;
 
 public record AuthResponse(
@@ -20,5 +18,4 @@ public record AuthResponse(
                                 user.getName());
         }
 
- 
 }
