@@ -97,6 +97,7 @@ public class ProjectService {
             throw new ForbiddenException("Access denied");
         }
 
+        projectMembershipRepository.deleteById(membership.getId());
         projectRepository.deleteById(projectId);
     }
 

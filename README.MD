@@ -1,6 +1,6 @@
 # Task Management API
 
-A modern REST API for managing projects, tasks, and team collaboration. Built with Spring Boot 4.0.6 and PostgreSQL, featuring JWT-based authentication and role-based access control.
+A REST API for managing projects, tasks, and team collaboration. Built with Spring Boot 4.0.6 and PostgreSQL, featuring JWT-based stateless authentication, role-based project membership, and containerized deployment via Docker Compose.
 
 ## Tech Stack
 
@@ -8,212 +8,209 @@ A modern REST API for managing projects, tasks, and team collaboration. Built wi
 |-----------|-----------|---------|
 | **Runtime** | Java | 25 |
 | **Framework** | Spring Boot | 4.0.6 |
-| **ORM** | Spring Data JPA | Hibernate |
-| **Database** | PostgreSQL | 12+ |
-| **Security** | Spring Security + JWT | JJWT 0.12.6 |
-| **Build Tool** | Gradle | 8.x |
-| **Validation** | Spring Validation | Jakarta Bean Validation |
+| **ORM** | Spring Data JPA | Hibernate 7.2 |
+| **Database** | PostgreSQL | 17 |
+| **Security** | Spring Security 7 + JWT | JJWT 0.12.6 |
+| **Build Tool** | Gradle (Groovy) | 8.x |
+| **Validation** | Jakarta Bean Validation | — |
 | **Utilities** | Lombok | Latest |
+| **Testing** | JUnit 5 + Mockito | — |
+| **Containerization** | Docker + Docker Compose | Multi-stage build |
 
+## Running the Project
 
-## Project Setup
+### Option A — Docker Compose (recommended)
 
-### 1. Prerequisites
+Spins up the API and PostgreSQL together, fully networked, no local Postgres install needed.
 
-Ensure you have the following installed:
-```bash
-java -version      # Should output Java 25
-gradle -version    # Should output Gradle 8.x
-psql -V           # Should output PostgreSQL 12+
-```
-
-### 2. Clone & Navigate
+**Prerequisites:** Docker Desktop
 
 ```bash
-cd task-management-api
+docker compose up --build
 ```
 
-### 3. Database Configuration
+The API will be available at `http://localhost:8080`. PostgreSQL is available at `localhost:5432` if you want to inspect it directly (e.g. via `psql` or a GUI client).
 
-Create a PostgreSQL database:
-```sql
-CREATE DATABASE taskdb;
-CREATE USER admin WITH PASSWORD 'password';
-GRANT ALL PRIVILEGES ON DATABASE taskdb TO admin;
+To stop:
+```bash
+docker compose down
 ```
 
-Or update connection settings in `src/main/resources/application.yaml`:
-```yaml
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/taskdb
-    username: admin
-    password: password
+Data persists across restarts via a named Docker volume. To wipe the database and start fresh:
+```bash
+docker compose down -v
 ```
 
-### 4. Build the Project
+### Option B — Local (no Docker for the app)
+
+**Prerequisites:**
+```bash
+java -version      # Java 25
+gradle -version    # Gradle 8.x
+```
+
+Requires a running PostgreSQL instance reachable at `localhost:5432` (a database `taskdb`, user `admin`, password `password` — or override via `application.yml`). The included Postgres Docker service can be used standalone for this:
 
 ```bash
-./gradlew clean build
+docker compose up postgres
 ```
 
-Or on Windows:
-```bash
-gradlew.bat clean build
-```
-
-### 5. Run the Application
-
+Then run the app directly:
 ```bash
 ./gradlew bootRun
 ```
 
-The API will start on `http://localhost:8080`
+On Windows:
+```bash
+gradlew.bat bootRun
+```
+
+The app resolves its database host via `${DB_HOST:localhost}` — no `DB_HOST` env var is set outside Docker, so it falls back to `localhost`, matching this setup automatically.
+
+## Authentication
+
+All endpoints except `/api/auth/**` require a JWT bearer token.
+
+**Register:**
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"testuser\",\"password\":\"password123\",\"name\":\"Test User\"}"
+```
+
+**Login:**
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"testuser\",\"password\":\"password123\"}"
+```
+
+Both return an `AuthResponse` containing a JWT. Attach it to subsequent requests:
+```bash
+-H "Authorization: Bearer <token>"
+```
+
+Registration auto-generates a token (auto-login on register) — no separate login call needed to start using the API immediately after signing up.
+
+## API Overview
+
+### Auth (`/api/auth`) — public
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/register` | Create account, returns token |
+| POST | `/login` | Authenticate, returns token |
+
+### Projects (`/api/projects`) — authenticated
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/` | Create project |
+| GET | `/{id}` | Get project by ID |
+| PUT | `/{id}` | Update project |
+| DELETE | `/{id}` | Delete project |
+| POST | `/{id}/members` | Add member (defaults to `MEMBER` role) |
+| DELETE | `/{id}/members/{userId}` | Remove member |
+| GET | `/{id}/members` | List project members |
+
+### Tasks
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/projects/{projectId}/tasks` | Create task in project |
+| GET | `/api/projects/{projectId}/tasks` | List tasks in project |
+| PUT | `/api/tasks/{taskId}/assign` | Self-assign task (`TODO` → `IN_PROGRESS`) |
+| PUT | `/api/tasks/{taskId}/complete` | Mark complete (`IN_PROGRESS` → `DONE`, assignee only) |
+
+Task status changes are action-based rather than data-based by design — there's no generic "update status" endpoint accepting an arbitrary status value. Assignment and completion are separate, constrained transitions.
 
 ## Project Structure
 
 ```
 src/main/java/com/gideon/task_management_api/
-├── TaskManagementApiApplication.java    # Main entry point
-├── controller/                          # REST endpoints (TBD)
-├── service/                             # Business logic
+├── TaskManagementApiApplication.java
+├── controller/          # REST endpoints
+│   ├── AuthController.java
+│   ├── ProjectController.java
+│   └── TaskController.java
+├── service/              # Business logic, returns DTOs
 │   ├── UserService.java
-│   └── ProjectService.java
-├── entity/                              # JPA entities
+│   ├── ProjectService.java
+│   └── TaskService.java
+├── entity/                # JPA entities
 │   ├── User.java
 │   ├── Project.java
-│   ├── Task.java
-│   ├── ProjectMembership.java
-│   ├── ProjectRole.java
-│   └── TaskStatus.java
-├── repository/                          # Data access
-│   ├── UserRepository.java
-│   ├── ProjectRepository.java
-│   ├── TaskRepository.java
-│   └── ProjectMembershipRepository.java
-├── security/                            # Security config & JWT
-│   └── SecurityConfig.java
-└── dataTransfer/                        # DTOs (TBD)
+│   ├── Task.java (+ TaskStatus)
+│   └── ProjectMembership.java (+ ProjectRole)
+├── repository/             # Spring Data repositories
+├── security/                # JWT filter, UserDetailsService, SecurityConfig
+├── dataTransfer/             # Request/response DTOs (records)
+└── exception/                  # Custom exceptions + GlobalExceptionHandler
 ```
 
-## Core Entities
+## Error Handling
 
-### User
-- Unique username-based authentication
-- Password hashing via Spring Security
-- Tracks creation timestamp
+Centralized via `@RestControllerAdvice` (`GlobalExceptionHandler`), returning a consistent `ErrorResponse` shape:
 
-### Project
-- Owned by a single user
-- Contains multiple tasks
-- Unique name per owner
-- Optional description
+```json
+{
+  "status": 404,
+  "error": "Not Found",
+  "message": "...",
+  "timestamp": "2026-08-04T22:40:32"
+}
+```
 
-### Task
-- Belongs to a project
-- Can be assigned to users
-- Status tracking (TODO, IN_PROGRESS, DONE)
-- Auto-timestamped creation
+Handled cases:
+- Custom `ApiException` hierarchy — `ResourceNotFoundException` (404), `ForbiddenException` (403), `InvalidCredentialsException` (401), `DuplicateResourceException` (409), `InvalidStateException` (409)
+- `DataIntegrityViolationException` — race-condition safety net (e.g. concurrent duplicate username), mapped to 409
+- `MethodArgumentNotValidException` — Bean Validation failures, mapped to 400 with all field errors combined into one message
 
-### ProjectRole & ProjectMembership
-- Role-based access control for projects
-- Manage team members and their permissions
+## Database Schema
 
-## Dependencies
+Hibernate manages schema via `ddl-auto: update`.
 
-Key dependencies included:
-- `spring-boot-starter-webmvc` - Web framework
-- `spring-boot-starter-data-jpa` - Database ORM
-- `spring-boot-starter-security` - Authentication & authorization
-- `spring-boot-starter-validation` - Input validation
-- `postgresql` - Database driver
-- `jjwt` - JWT token generation/validation
-- `lombok` - Boilerplate reduction
+**Tables:** `users`, `projects`, `tasks`, `project_memberships`
 
 ## Testing
 
-Run tests with:
 ```bash
 ./gradlew test
 ```
 
-Test files are located in `src/test/java/` with comprehensive unit tests for services:
-- `UserServiceTest.java` - User authentication & registration
-- `ProjectServiceTest.java` - Project CRUD operations
+Unit tests cover the service layer (`UserServiceTest`, `ProjectServiceTest`) with JUnit 5 + Mockito.
 
-## Database Schema
-
-The application uses Hibernate with `ddl-auto: update` to automatically create/update tables on startup.
-
-**Tables created:**
-- `users` - User accounts
-- `projects` - Project definitions
-- `tasks` - Task items
-- `project_memberships` - Team membership
-- `project_roles` - Role definitions
+Manual/live endpoint verification has been done via `curl` against the Dockerized stack — auth (register/login), project creation, and JWT-protected access have all been confirmed end-to-end.
 
 ## Environment Configuration
 
-Default configuration in `application.yaml`:
+`src/main/resources/application.yml`:
 ```yaml
 spring:
   application:
     name: task-management-api
   datasource:
-    url: jdbc:postgresql://localhost:5432/taskdb
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/taskdb
     username: admin
     password: password
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+
+jwt:
+  secret: <base64-encoded secret>
+  expiration: 86400000
 ```
 
-## Development
+`DB_HOST` defaults to `localhost` for local runs and is set to `task-management-db` (the Postgres service name) automatically by Docker Compose — see `docker-compose.yml`.
 
-### Compiling
-```bash
-./gradlew compileJava
-```
+## Deployment
 
-### Building JAR
-```bash
-./gradlew build
-```
+A multi-stage `Dockerfile` builds the JAR with `gradle:jdk25` and runs it on `eclipse-temurin:25-jre`. `docker-compose.yml` orchestrates the app and a PostgreSQL 17 container on a shared Docker-managed network, with the app resolving Postgres by container/service name via Docker's internal DNS rather than `localhost`.
 
-### Running JAR
-```bash
-java -jar build/libs/task-management-api-0.0.1-SNAPSHOT.jar
-```
 
-## Current Status
-
-✅ Entities & Database Models
-✅ Security Configuration (Spring Security + JWT)
-✅ Service Layer (UserService, ProjectService)
-✅ Repository Layer
-✅ Unit Tests
-
-🚧 In Development:
-- REST Controllers & Endpoints
-- DTO Layer
-- Additional validation rules
-- API documentation (Swagger/OpenAPI)
-- Advanced error handling
-
-## Next Steps
-
-1. Implement REST controllers for User and Project endpoints
-2. Add DTO classes for request/response handling
-3. Implement JWT token generation and validation
-4. Add comprehensive error handling & logging
-5. Add API documentation with Swagger
-6. Implement integration tests
-7. Add Docker support
-
-## Support & Documentation
+## Documentation
 
 - [Spring Boot Documentation](https://spring.io/projects/spring-boot)
 - [Spring Security Guide](https://spring.io/guides/gs/securing-web/)
 - [Spring Data JPA Reference](https://docs.spring.io/spring-data/jpa/reference/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+- [Docker Compose Reference](https://docs.docker.com/compose/)

@@ -1,0 +1,797 @@
+openapi: 3.0.3
+
+info:
+  title: Task Management API
+  description: |
+    A RESTful API for managing projects, tasks, and team members.
+
+    ## Authentication
+    All endpoints except `/api/auth/register` and `/api/auth/login` require a valid
+    JWT Bearer token obtained from the auth endpoints.
+
+    ## Roles
+    Within each project, a user can hold one of two roles:
+    - **OWNER** - the user who created the project; can add/remove members and delete the project.
+    - **MEMBER** - any user added to the project; can view project details and manage tasks.
+
+    ## Task Lifecycle
+    Tasks are created with status `TODO` and can be transitioned:
+    `TODO` -> `IN_PROGRESS` -> `DONE`
+  version: 0.0.1-SNAPSHOT
+  contact:
+    name: Gideon
+  license:
+    name: Private
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: Register and log in to obtain a JWT token.
+  - name: Projects
+    description: Create and manage projects and their members.
+  - name: Tasks
+    description: Create and manage tasks within projects.
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # -- Auth ------------------------------------------------------------------
+  /api/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Creates a new user account and returns a JWT token along with basic user info.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: johndoe
+              password: secret123
+              name: John Doe
+      responses:
+        '201':
+          description: User created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiJ9...
+                userId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                username: johndoe
+                name: John Doe
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Log in
+      description: Authenticates an existing user and returns a JWT token.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: johndoe
+              password: secret123
+      responses:
+        '200':
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # -- Projects --------------------------------------------------------------
+  /api/projects:
+    post:
+      tags:
+        - Projects
+      summary: Create a project
+      description: Creates a new project owned by the authenticated user. The owner is automatically added as a project member with role OWNER.
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            example:
+              name: My First Project
+              description: A sample project for demonstration.
+      responses:
+        '201':
+          description: Project created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/projects/{id}:
+    get:
+      tags:
+        - Projects
+      summary: Get a project by ID
+      description: Returns a single project. The authenticated user must be a member or owner of the project.
+      operationId: getProjectById
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Project found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Projects
+      summary: Update a project
+      description: Updates the name and/or description of a project. Only the project owner may perform this action.
+      operationId: updateProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            example:
+              name: Renamed Project
+              description: Updated description.
+      responses:
+        '200':
+          description: Project updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Projects
+      summary: Delete a project
+      description: Permanently deletes a project and all its tasks. Only the project owner may perform this action.
+      operationId: deleteProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Project deleted successfully. No response body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/projects/{id}/members:
+    get:
+      tags:
+        - Projects
+      summary: List project members
+      description: Returns all members of a project. The authenticated user must be a member or owner.
+      operationId: getProjectMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: List of project members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+        - Projects
+      summary: Add a member to a project
+      description: Adds an existing user to the project as a MEMBER. Only the project owner may perform this action. The user is identified by their username.
+      operationId: addProjectMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+            example:
+              username: janedoe
+      responses:
+        '201':
+          description: Member added successfully. No response body.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/projects/{id}/members/{username}:
+    delete:
+      tags:
+        - Projects
+      summary: Remove a member from a project
+      description: Removes a user from the project. Only the project owner may perform this action. The owner cannot remove themselves.
+      operationId: removeProjectMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: username
+          in: path
+          required: true
+          description: The username of the member to remove.
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 50
+          example: janedoe
+      responses:
+        '204':
+          description: Member removed successfully. No response body.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # -- Tasks -----------------------------------------------------------------
+  /api/projects/{projectId}/tasks:
+    post:
+      tags:
+        - Tasks
+      summary: Create a task
+      description: Creates a new task inside the specified project with an initial status of TODO. The authenticated user must be a member or owner of the project.
+      operationId: createTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+            example:
+              title: Implement login page
+              description: Build the login page UI with form validation.
+      responses:
+        '201':
+          description: Task created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags:
+        - Tasks
+      summary: List tasks for a project
+      description: Returns all tasks belonging to the specified project. The authenticated user must be a member or owner of the project.
+      operationId: getTasksByProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathProjectId'
+      responses:
+        '200':
+          description: List of tasks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/assign:
+    put:
+      tags:
+        - Tasks
+      summary: Assign a task to the current user
+      description: Assigns the specified task to the currently authenticated user. The user must be a member of the project that owns the task. If the task is currently TODO, its status advances to IN_PROGRESS.
+      operationId: assignTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathTaskId'
+      responses:
+        '200':
+          description: Task assigned successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/tasks/{taskId}/complete:
+    put:
+      tags:
+        - Tasks
+      summary: Mark a task as complete
+      description: Advances the task status to DONE. The authenticated user must be the assigned user or an owner of the project.
+      operationId: completeTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PathTaskId'
+      responses:
+        '200':
+          description: Task marked as complete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+
+  # -- Security Schemes ------------------------------------------------------
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Pass the JWT token received from /api/auth/login or /api/auth/register
+        as a Bearer token in the Authorization header.
+        Example: Authorization: Bearer <token>
+
+  # -- Reusable Parameters ---------------------------------------------------
+  parameters:
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the project (UUID).
+      schema:
+        type: string
+        format: uuid
+      example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+    PathProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: Unique identifier of the project (UUID).
+      schema:
+        type: string
+        format: uuid
+      example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+    PathTaskId:
+      name: taskId
+      in: path
+      required: true
+      description: Unique identifier of the task (UUID).
+      schema:
+        type: string
+        format: uuid
+      example: 7cb57b10-8cd3-11ec-b909-0242ac120002
+
+  # -- Reusable Responses ----------------------------------------------------
+  responses:
+    BadRequest:
+      description: Bad request - validation error or malformed input.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            error: Bad Request
+            message: "username: Username is required"
+            timestamp: "2025-01-15T10:30:00"
+
+    Unauthorized:
+      description: Unauthorized - missing or invalid JWT token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            error: Unauthorized
+            message: Invalid credentials provided.
+            timestamp: "2025-01-15T10:30:00"
+
+    Forbidden:
+      description: Forbidden - the authenticated user does not have permission to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 403
+            error: Forbidden
+            message: You do not have permission to access this resource.
+            timestamp: "2025-01-15T10:30:00"
+
+    NotFound:
+      description: Not found - the requested resource does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 404
+            error: Not Found
+            message: Project not found.
+            timestamp: "2025-01-15T10:30:00"
+
+    Conflict:
+      description: Conflict - a database constraint was violated (e.g. duplicate username or project name).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 409
+            error: Conflict
+            message: A database constraint was violated. Please try again.
+            timestamp: "2025-01-15T10:30:00"
+
+  # -- Schemas ---------------------------------------------------------------
+  schemas:
+
+    # Request bodies
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - name
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: Unique username for the new account.
+          example: johndoe
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          format: password
+          description: Account password (min 8 characters).
+          example: secret123
+        name:
+          type: string
+          maxLength: 100
+          description: Full display name of the user.
+          example: John Doe
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: The account username.
+          example: johndoe
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          format: password
+          description: The account password.
+          example: secret123
+
+    CreateProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          description: Project name (must be unique per owner).
+          example: My First Project
+        description:
+          type: string
+          maxLength: 3000
+          nullable: true
+          description: Optional project description.
+          example: A sample project for demonstration.
+
+    AddMemberRequest:
+      type: object
+      required:
+        - username
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          description: Username of the user to add as a project member.
+          example: janedoe
+
+    CreateTaskRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          description: Title of the task.
+          example: Implement login page
+        description:
+          type: string
+          maxLength: 3000
+          nullable: true
+          description: Optional detailed description of the task.
+          example: Build the login page UI with form validation.
+
+    # Response bodies
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT bearer token to use for authenticated requests.
+          example: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJqb2huZG9lIn0.abc123
+        userId:
+          type: string
+          format: uuid
+          description: Unique identifier of the authenticated user.
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        username:
+          type: string
+          description: Username of the authenticated user.
+          example: johndoe
+        name:
+          type: string
+          description: Display name of the authenticated user.
+          example: John Doe
+
+    ProjectResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the project.
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        name:
+          type: string
+          description: Name of the project.
+          example: My First Project
+        description:
+          type: string
+          nullable: true
+          description: Description of the project.
+          example: A sample project for demonstration.
+        ownerId:
+          type: string
+          format: uuid
+          description: Unique identifier of the project owner.
+          example: 9b3a2e71-1234-4abc-b1c2-abcdef012345
+        ownerUsername:
+          type: string
+          description: Username of the project owner.
+          example: johndoe
+        ownerName:
+          type: string
+          description: Display name of the project owner.
+          example: John Doe
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the project was created (ISO 8601).
+          example: "2025-01-15T09:00:00"
+
+    MemberResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the member user.
+          example: 9b3a2e71-1234-4abc-b1c2-abcdef012345
+        username:
+          type: string
+          description: Username of the member.
+          example: janedoe
+        name:
+          type: string
+          description: Display name of the member.
+          example: Jane Doe
+        role:
+          $ref: '#/components/schemas/ProjectRole'
+        joinedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the user joined the project (ISO 8601).
+          example: "2025-01-16T08:30:00"
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the task.
+          example: 7cb57b10-8cd3-11ec-b909-0242ac120002
+        projectId:
+          type: string
+          format: uuid
+          description: Identifier of the project this task belongs to.
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Identifier of the user assigned to this task. Null if unassigned.
+          example: 9b3a2e71-1234-4abc-b1c2-abcdef012345
+        assigneeUsername:
+          type: string
+          nullable: true
+          description: Username of the assignee. Null if unassigned.
+          example: janedoe
+        assigneeName:
+          type: string
+          nullable: true
+          description: Display name of the assignee. Null if unassigned.
+          example: Jane Doe
+        title:
+          type: string
+          description: Title of the task.
+          example: Implement login page
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of the task.
+          example: Build the login page UI with form validation.
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the task was created (ISO 8601).
+          example: "2025-01-15T10:00:00"
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 404
+        error:
+          type: string
+          description: HTTP status reason phrase.
+          example: Not Found
+        message:
+          type: string
+          description: Human-readable error message.
+          example: Project not found.
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the error (ISO 8601).
+          example: "2025-01-15T10:30:00"
+
+    # Enums
+    TaskStatus:
+      type: string
+      description: |
+        Lifecycle status of a task.
+        - TODO: task created but not yet started (default).
+        - IN_PROGRESS: task has been assigned and is being worked on.
+        - DONE: task has been completed.
+      enum:
+        - TODO
+        - IN_PROGRESS
+        - DONE
+      example: TODO
+
+    ProjectRole:
+      type: string
+      description: |
+        Role of a user within a project.
+        - OWNER: creator of the project; full management rights.
+        - MEMBER: added collaborator; can view and work on tasks.
+      enum:
+        - OWNER
+        - MEMBER
+      example: MEMBER
