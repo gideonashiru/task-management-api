@@ -7,6 +7,9 @@ import com.gideon.task_management_api.entity.ProjectMembership;
 import com.gideon.task_management_api.entity.ProjectRole;
 import com.gideon.task_management_api.entity.Task;
 import com.gideon.task_management_api.entity.TaskStatus;
+import com.gideon.task_management_api.exception.ForbiddenException;
+import com.gideon.task_management_api.exception.InvalidStateException;
+import com.gideon.task_management_api.exception.ResourceNotFoundException;
 import com.gideon.task_management_api.repository.ProjectRepository;
 import com.gideon.task_management_api.repository.ProjectMembershipRepository;
 import com.gideon.task_management_api.repository.TaskRepository;
@@ -45,7 +48,7 @@ public class TaskServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             taskService.createTask(projectId, "Task Name", "Task Description", creator);
         });
     }
@@ -62,7 +65,7 @@ public class TaskServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             taskService.createTask(projectId, "Task Name", "Task Description", creator);
         });
     }
@@ -101,7 +104,7 @@ public class TaskServiceTest {
         User assignee = User.builder().id(UUID.randomUUID()).build();
         when(taskRepository.findById(taskId)).thenReturn(Optional.empty());
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             taskService.assignTask(taskId, assignee);
         });
         verify(taskRepository, never()).save(any());
@@ -119,7 +122,7 @@ public class TaskServiceTest {
         when(projectMembershipRepository.findByProjectIdAndMemberId(task.getProject().getId(), assignee.getId()))
                 .thenReturn(Optional.empty());
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             taskService.assignTask(taskId, assignee);
         });
 
@@ -143,7 +146,7 @@ public class TaskServiceTest {
                         .role(ProjectRole.MEMBER)
                         .build()));
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(InvalidStateException.class, () -> {
             taskService.assignTask(taskId, assignee);
         });
         verify(taskRepository, never()).save(any());
@@ -168,7 +171,7 @@ public class TaskServiceTest {
                         .role(ProjectRole.MEMBER)
                         .build()));
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(InvalidStateException.class, () -> {
             taskService.assignTask(taskId, assignee);
         });
         verify(taskRepository, never()).save(any());
@@ -206,7 +209,7 @@ public class TaskServiceTest {
         User requester = User.builder().id(UUID.randomUUID()).build();
         when(taskRepository.findById(taskId)).thenReturn(Optional.empty());
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             taskService.updateTaskStatus(taskId, requester);
         });
         verify(taskRepository, never()).save(any());
@@ -224,7 +227,7 @@ public class TaskServiceTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             taskService.updateTaskStatus(taskId, requester);
         });
         verify(taskRepository, never()).save(any());
@@ -242,7 +245,7 @@ public class TaskServiceTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             taskService.updateTaskStatus(taskId, requester);
         });
         verify(taskRepository, never()).save(any());
@@ -277,7 +280,7 @@ public class TaskServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             taskService.getTasksByProject(projectId, requestingUser);
         });
     }
@@ -293,7 +296,7 @@ public class TaskServiceTest {
         when(projectMembershipRepository.findByProjectIdAndMemberId(projectId, requestingUser.getId()))
                 .thenReturn(Optional.empty());
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             taskService.getTasksByProject(projectId, requestingUser);
         });
 

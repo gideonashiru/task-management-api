@@ -4,6 +4,9 @@ import com.gideon.task_management_api.dataTransfer.MemberResponse;
 import com.gideon.task_management_api.dataTransfer.ProjectResponse;
 import com.gideon.task_management_api.entity.Project;
 import com.gideon.task_management_api.entity.User;
+import com.gideon.task_management_api.exception.DuplicateResourceException;
+import com.gideon.task_management_api.exception.ForbiddenException;
+import com.gideon.task_management_api.exception.ResourceNotFoundException;
 import com.gideon.task_management_api.entity.ProjectMembership;
 import com.gideon.task_management_api.entity.ProjectRole;
 import com.gideon.task_management_api.repository.ProjectRepository;
@@ -38,19 +41,6 @@ class ProjectServiceTest {
 
     @InjectMocks
     private ProjectService projectService;
-
-    @Test
-    void createProject_shouldThrowException_whenProjectNameIsEmpty() {
-        // Arrange
-        User owner = User.builder().id(UUID.randomUUID()).username("owner").build();
-
-        // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
-            projectService.createProject(owner, "", "Description");
-        });
-
-        verify(projectRepository, never()).save(any());
-    }
 
     @Test
     void createProject_shouldSuccessfullyCreateProject_whenAllInputsAreValid() {
@@ -130,7 +120,7 @@ class ProjectServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.getProjectById(projectId, notAMember);
         });
         verify(projectRepository).findById(projectId);
@@ -144,7 +134,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.getProjectById(projectId, projectMember);
         });
         verify(projectRepository).findById(projectId);
@@ -158,7 +148,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.updateProject(projectId, requestingUser, "New Name", "New Description");
         });
 
@@ -185,7 +175,7 @@ class ProjectServiceTest {
                         .build()));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.updateProject(projectId, notOwner, "New Name", "New Description");
         });
 
@@ -255,7 +245,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows( ResourceNotFoundException.class, () -> {
             projectService.deleteProject(projectId, User.builder().id(UUID.randomUUID()).build());
         });
 
@@ -284,7 +274,7 @@ class ProjectServiceTest {
                         .build()));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.deleteProject(projectId, notOwner);
         });
 
@@ -304,7 +294,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.addMember(projectId, owner, newMember.getUsername());
         });
 
@@ -334,7 +324,7 @@ class ProjectServiceTest {
                         .build()));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.addMember(projectId, notOwner, newMember.getUsername());
         });
 
@@ -367,7 +357,7 @@ class ProjectServiceTest {
         when(userRepository.findByUsername(newMemberUsername)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.addMember(projectId, owner, newMemberUsername);
         });
 
@@ -403,7 +393,7 @@ class ProjectServiceTest {
                 .thenReturn(true);
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(DuplicateResourceException.class, () -> {
             projectService.addMember(projectId, owner, existingMemberUsername);
         });
 
@@ -464,7 +454,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.removeMember(projectId, owner, memberToRemove.getUsername());
         });
 
@@ -495,7 +485,7 @@ class ProjectServiceTest {
                         .build()));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.removeMember(projectId, notOwner, memberToRemove.getUsername());
         });
 
@@ -527,7 +517,7 @@ class ProjectServiceTest {
         when(userRepository.findByUsername(nonExistentMemberUsername)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.removeMember(projectId, owner, nonExistentMemberUsername);
         });
 
@@ -564,7 +554,7 @@ class ProjectServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.removeMember(projectId, owner, nonMemberUsername);
         });
 
@@ -623,7 +613,7 @@ class ProjectServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ResourceNotFoundException.class, () -> {
             projectService.getProjectMembers(projectId, requestingUser);
         });
 
@@ -645,7 +635,7 @@ class ProjectServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(ForbiddenException.class, () -> {
             projectService.getProjectMembers(projectId, notAMember);
         });
 

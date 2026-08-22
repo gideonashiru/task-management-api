@@ -2,6 +2,8 @@ package com.gideon.task_management_api.service;
 
 import com.gideon.task_management_api.dataTransfer.AuthResponse;
 import com.gideon.task_management_api.entity.User;
+import com.gideon.task_management_api.exception.DuplicateResourceException;
+import com.gideon.task_management_api.exception.InvalidCredentialsException;
 import com.gideon.task_management_api.repository.UserRepository;
 import com.gideon.task_management_api.security.JwtUtil;
 import org.junit.jupiter.api.Test;
@@ -44,7 +46,7 @@ class UserServiceTest {
                 .thenReturn(Optional.of(existingUser));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> {
+        assertThrows(DuplicateResourceException.class, () -> {
             userService.register("gideon", "password123", "Gideon");
         });
 
@@ -79,7 +81,7 @@ class UserServiceTest {
     void login_shouldThrow_whenUsernameDoesNotExist() {
         when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+        InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () ->
                 userService.login("unknown", "anyPassword"));
 
         assertEquals("Invalid username or password", ex.getMessage());
@@ -96,7 +98,7 @@ class UserServiceTest {
         when(userRepository.findByUsername("gideon")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrongPassword", "storedHash")).thenReturn(false);
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+        InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () ->
                 userService.login("gideon", "wrongPassword"));
 
         assertEquals("Invalid username or password", ex.getMessage());
