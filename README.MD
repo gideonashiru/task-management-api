@@ -9,7 +9,7 @@ A REST API for managing projects, tasks, and team collaboration. Built with Spri
 | **Runtime** | Java | 25 |
 | **Framework** | Spring Boot | 4.0.6 |
 | **ORM** | Spring Data JPA | Hibernate 7.2 |
-| **Database** | PostgreSQL | 17 |
+| **Database** | PostgreSQL | 18 |
 | **Security** | Spring Security 7 + JWT | JJWT 0.12.6 |
 | **Build Tool** | Gradle (Groovy) | 8.x |
 | **Validation** | Jakarta Bean Validation | — |
@@ -204,7 +204,7 @@ jwt:
 
 ## Deployment
 
-A multi-stage `Dockerfile` builds the JAR with `gradle:jdk25` and runs it on `eclipse-temurin:25-jre`. `docker-compose.yml` orchestrates the app and a PostgreSQL 17 container on a shared Docker-managed network, with the app resolving Postgres by container/service name via Docker's internal DNS rather than `localhost`.
+A multi-stage `Dockerfile` builds the JAR with `gradle:jdk25` and runs it on `eclipse-temurin:25-jre`. `docker-compose.yml` orchestrates the app and a PostgreSQL 18 container on a shared Docker-managed network, with the app resolving Postgres by container/service name via Docker's internal DNS rather than `localhost`.
 
 
 ## Documentation
