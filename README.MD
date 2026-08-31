@@ -1,216 +1,174 @@
 # Task Management API
 
-A REST API for managing projects, tasks, and team collaboration. Built with Spring Boot 4.0.6 and PostgreSQL, featuring JWT-based stateless authentication, role-based project membership, and containerized deployment via Docker Compose.
+[![Java 25](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot 4](https://img.shields.io/badge/Spring_Boot-4.0.6-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Render](https://img.shields.io/badge/Render-Live_Web_Service-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://task-management-api-f6vd.onrender.com/swagger-ui/index.html)
+[![Swagger UI](https://img.shields.io/badge/Swagger_UI-Interactive_Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://task-management-api-f6vd.onrender.com/swagger-ui/index.html)
 
-## Tech Stack
+A production-grade, multi-tenant RESTful API for managing workspaces, projects, tasks, and team collaboration. Built with **Java 25** and **Spring Boot 4**, featuring stateless **JWT authentication**, **role-based access control (RBAC)**, an action-constrained **task state machine**, and automated database migrations via **Flyway**.
 
-| Component | Technology | Version |
-|-----------|-----------|---------|
-| **Runtime** | Java | 25 |
-| **Framework** | Spring Boot | 4.0.6 |
-| **ORM** | Spring Data JPA | Hibernate 7.2 |
-| **Database** | PostgreSQL | 18 |
-| **Security** | Spring Security 7 + JWT | JJWT 0.12.6 |
-| **Build Tool** | Gradle (Groovy) | 8.x |
-| **Validation** | Jakarta Bean Validation | — |
-| **Utilities** | Lombok | Latest |
-| **Testing** | JUnit 5 + Mockito | — |
-| **Containerization** | Docker + Docker Compose | Multi-stage build |
+---
 
-## Running the Project
+##  Live Demo & Interactive Documentation
 
-### Option A — Docker Compose (recommended)
+>  **Interactive Swagger UI:** [**https://task-management-api-f6vd.onrender.com/swagger-ui/index.html**](https://task-management-api-f6vd.onrender.com/swagger-ui/index.html)  
+> 📄 **OpenAPI Specification (JSON):** [`/v3/api-docs`](https://task-management-api-f6vd.onrender.com/v3/api-docs)
 
-Spins up the API and PostgreSQL together, fully networked, no local Postgres install needed.
+> [!TIP]
+> **Recruiter & Evaluator Sandbox (Pre-Seeded Accounts)**  
+> The live deployment is pre-seeded with test users, a showcase project, and tasks in each stage of the lifecycle:
+> - **Demo User:** `username: demo` | `password: demo1234` *(Project Owner)*
+> - **Collaborator 1:** `username: alice` | `password: alice1234` *(Project Member)*
+> - **Collaborator 2:** `username: bob` | `password: bob1234` *(Project Member)*
+>
+> **Quick Test in 30 Seconds via Swagger UI:**
+> 1. Open the [Swagger UI](https://task-management-api-f6vd.onrender.com/swagger-ui/index.html).
+> 2. Execute `POST /api/auth/login` with `demo` / `demo1234` to get your JWT token.
+> 3. Click the top **Authorize 🔓** button and paste the token.
+> 4. Test any protected project or task endpoint directly from your browser!
 
-**Prerequisites:** Docker Desktop
+*(Note: Render free instances spin down after inactivity. Initial request may take ~30-40 seconds for cold start).*
+
+---
+
+##  System Architecture
+
+```mermaid
+flowchart TD
+    Client["Client / Recruiter / Browser\n(Web, Swagger UI, curl)"]
+    
+    subgraph Render["Render Cloud (Web Service)"]
+        subgraph SpringApp["Spring Boot Application (Java 25)"]
+            Security["Spring Security 7\n(CORS + JWT Auth Filter)"]
+            Controllers["REST Controllers\n(/api/auth, /api/projects, /api/tasks)"]
+            Services["Service Layer (Business Logic)\n(UserService, ProjectService, TaskService)"]
+            Repos["Spring Data JPA Repositories\n(Hibernate 7.2)"]
+            Flyway["Flyway Migration Engine\n(V1 Schema + V2 Seed Data)"]
+        end
+    end
+    
+    subgraph CloudDB["Aiven Cloud Platform"]
+        Postgres[("Managed PostgreSQL 18\n(Users, Projects, Memberships, Tasks)")]
+    end
+
+    Client -->|HTTPS / JWT Bearer| Security
+    Security --> Controllers
+    Controllers --> Services
+    Services --> Repos
+    Repos -->|HikariCP Connection Pool / SSL| Postgres
+    Flyway -->|Auto-migration on startup| Postgres
+```
+
+---
+
+##  Key Engineering Highlights
+
+- **Stateless JWT Authentication:** Implemented per-request bearer token validation using JJWT and custom `OncePerRequestFilter`, decoupling auth state from server memory.
+- **Multi-Tenant Role-Based Access Control (RBAC):** Granular permission model differentiating project `OWNER` (full project administration, membership control, deletion) and `MEMBER` (task execution and collaboration).
+- **Constrained State Machine Design:** Task status transitions are modeled as distinct business operations (`/assign`, `/complete`) rather than arbitrary status updates, preventing invalid state jumps.
+- **Layered Clean Architecture & DTO Separation:** Strict domain isolation using Java 25 records as DTOs—JPA entities are never leaked to API consumers.
+- **Centralized Error Handling:** Global `@RestControllerAdvice` translating custom domain exceptions (`ResourceNotFoundException`, `ForbiddenException`, `InvalidStateException`, `DataIntegrityViolationException`) into uniform, RFC-compliant JSON responses.
+- **Automated Schema Migrations:** Managed PostgreSQL schema evolution and idempotent seed data using **Flyway**, ensuring identical database environments across Docker and cloud platforms.
+- **Containerized Multi-Stage Build:** Multi-stage `Dockerfile` optimizing build size and execution on `eclipse-temurin:25-jre`.
+
+---
+
+## Task Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> TODO: Task Created (by Owner or Member)
+    TODO --> IN_PROGRESS: PUT /api/tasks/{id}/assign (Self-assigned by Member)
+    IN_PROGRESS --> DONE: PUT /api/tasks/{id}/complete (Marked by Assignee or Owner)
+    DONE --> [*]
+```
+
+---
+
+##  API Overview
+
+### 1. Authentication (`/api/auth`) — Public
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register account, returns JWT bearer token |
+| `POST` | `/api/auth/login` | Authenticate with username & password, returns JWT token |
+
+### 2. Projects (`/api/projects`) — Authenticated (Bearer Token)
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `POST` | `/api/projects` | Create a new workspace project | Authenticated User |
+| `GET` | `/api/projects/{id}` | Get project metadata & owner details | Project Owner / Member |
+| `PUT` | `/api/projects/{id}` | Update project name or description | Project Owner Only |
+| `DELETE`| `/api/projects/{id}` | Delete project and cascade delete tasks | Project Owner Only |
+| `GET` | `/api/projects/{id}/members` | List all members and roles | Project Owner / Member |
+| `POST` | `/api/projects/{id}/members` | Add a member by username | Project Owner Only |
+| `DELETE`| `/api/projects/{id}/members/{username}` | Remove a member | Project Owner Only |
+
+### 3. Tasks (`/api/tasks` & `/api/projects/{id}/tasks`) — Authenticated
+| Method | Endpoint | Description | Permission |
+|---|---|---|---|
+| `POST` | `/api/projects/{id}/tasks` | Create task inside project (Status: `TODO`) | Project Owner / Member |
+| `GET` | `/api/projects/{id}/tasks` | List all tasks in project | Project Owner / Member |
+| `PUT` | `/api/tasks/{id}/assign` | Self-assign task (`TODO` $\rightarrow$ `IN_PROGRESS`) | Project Member |
+| `PUT` | `/api/tasks/{id}/complete` | Mark complete (`IN_PROGRESS` $\rightarrow$ `DONE`) | Assignee or Owner |
+
+---
+
+##  Local Development & Quick Start
+
+### Option A: Docker Compose (All-in-One)
+Spins up both the Spring Boot application and a local PostgreSQL instance:
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/task-management-api.git
+cd task-management-api
+
+# Start services
 docker compose up --build
 ```
+The API and Swagger UI will be available at `http://localhost:8080/swagger-ui/index.html`.
 
-The API will be available at `http://localhost:8080`. PostgreSQL is available at `localhost:5432` if you want to inspect it directly (e.g. via `psql` or a GUI client).
-
-To stop:
-```bash
-docker compose down
-```
-
-Data persists across restarts via a named Docker volume. To wipe the database and start fresh:
-```bash
-docker compose down -v
-```
-
-### Option B — Local (no Docker for the app)
-
-**Prerequisites:**
-```bash
-java -version      # Java 25
-gradle -version    # Gradle 8.x
-```
-
-Requires a running PostgreSQL instance reachable at `localhost:5432` (a database `taskdb`, user `admin`, password `password` — or override via `application.yml`). The included Postgres Docker service can be used standalone for this:
+### Option B: Local Gradle Run
+Prerequisites: JDK 25 and running PostgreSQL instance.
 
 ```bash
-docker compose up postgres
-```
+# Run tests
+./gradlew test
 
-Then run the app directly:
-```bash
+# Start API application
 ./gradlew bootRun
 ```
-
 On Windows:
-```bash
-gradlew.bat bootRun
+```powershell
+.\gradlew.bat bootRun
 ```
 
-The app resolves its database host via `${DB_HOST:localhost}` — no `DB_HOST` env var is set outside Docker, so it falls back to `localhost`, matching this setup automatically.
+---
 
-## Authentication
+## 🧪 Testing & Code Quality
 
-All endpoints except `/api/auth/**` require a JWT bearer token.
+- **Service Layer Coverage:** Mockito and JUnit 5 unit tests for `UserServiceTest`, `ProjectServiceTest`, and `TaskServiceTest`.
+- **Validation & Constraint Testing:** Jakarta Bean Validation testing verifying payload boundary conditions and data integrity rules.
 
-**Register:**
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d "{\"username\":\"testuser\",\"password\":\"password123\",\"name\":\"Test User\"}"
-```
-
-**Login:**
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d "{\"username\":\"testuser\",\"password\":\"password123\"}"
-```
-
-Both return an `AuthResponse` containing a JWT. Attach it to subsequent requests:
-```bash
--H "Authorization: Bearer <token>"
-```
-
-Registration auto-generates a token (auto-login on register) — no separate login call needed to start using the API immediately after signing up.
-
-## API Overview
-
-### Auth (`/api/auth`) — public
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/register` | Create account, returns token |
-| POST | `/login` | Authenticate, returns token |
-
-### Projects (`/api/projects`) — authenticated
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/` | Create project |
-| GET | `/{id}` | Get project by ID |
-| PUT | `/{id}` | Update project |
-| DELETE | `/{id}` | Delete project |
-| POST | `/{id}/members` | Add member (defaults to `MEMBER` role) |
-| DELETE | `/{id}/members/{userId}` | Remove member |
-| GET | `/{id}/members` | List project members |
-
-### Tasks
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/projects/{projectId}/tasks` | Create task in project |
-| GET | `/api/projects/{projectId}/tasks` | List tasks in project |
-| PUT | `/api/tasks/{taskId}/assign` | Self-assign task (`TODO` → `IN_PROGRESS`) |
-| PUT | `/api/tasks/{taskId}/complete` | Mark complete (`IN_PROGRESS` → `DONE`, assignee only) |
-
-Task status changes are action-based rather than data-based by design — there's no generic "update status" endpoint accepting an arbitrary status value. Assignment and completion are separate, constrained transitions.
-
-## Project Structure
-
-```
-src/main/java/com/gideon/task_management_api/
-├── TaskManagementApiApplication.java
-├── controller/          # REST endpoints
-│   ├── AuthController.java
-│   ├── ProjectController.java
-│   └── TaskController.java
-├── service/              # Business logic, returns DTOs
-│   ├── UserService.java
-│   ├── ProjectService.java
-│   └── TaskService.java
-├── entity/                # JPA entities
-│   ├── User.java
-│   ├── Project.java
-│   ├── Task.java (+ TaskStatus)
-│   └── ProjectMembership.java (+ ProjectRole)
-├── repository/             # Spring Data repositories
-├── security/                # JWT filter, UserDetailsService, SecurityConfig
-├── dataTransfer/             # Request/response DTOs (records)
-└── exception/                  # Custom exceptions + GlobalExceptionHandler
-```
-
-## Error Handling
-
-Centralized via `@RestControllerAdvice` (`GlobalExceptionHandler`), returning a consistent `ErrorResponse` shape:
-
-```json
-{
-  "status": 404,
-  "error": "Not Found",
-  "message": "...",
-  "timestamp": "2026-08-04T22:40:32"
-}
-```
-
-Handled cases:
-- Custom `ApiException` hierarchy — `ResourceNotFoundException` (404), `ForbiddenException` (403), `InvalidCredentialsException` (401), `DuplicateResourceException` (409), `InvalidStateException` (409)
-- `DataIntegrityViolationException` — race-condition safety net (e.g. concurrent duplicate username), mapped to 409
-- `MethodArgumentNotValidException` — Bean Validation failures, mapped to 400 with all field errors combined into one message
-
-## Database Schema
-
-Hibernate manages schema via `ddl-auto: update`.
-
-**Tables:** `users`, `projects`, `tasks`, `project_memberships`
-
-## Testing
-
+Run test suite:
 ```bash
 ./gradlew test
 ```
 
-Unit tests cover the service layer (`UserServiceTest`, `ProjectServiceTest`) with JUnit 5 + Mockito.
+---
 
-Manual/live endpoint verification has been done via `curl` against the Dockerized stack — auth (register/login), project creation, and JWT-protected access have all been confirmed end-to-end.
+## 🛠️ Technology Stack
 
-## Environment Configuration
-
-`src/main/resources/application.yml`:
-```yaml
-spring:
-  application:
-    name: task-management-api
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/taskdb
-    username: admin
-    password: password
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-
-jwt:
-  secret: <base64-encoded secret>
-  expiration: 86400000
-```
-
-`DB_HOST` defaults to `localhost` for local runs and is set to `task-management-db` (the Postgres service name) automatically by Docker Compose — see `docker-compose.yml`.
-
-## Deployment
-
-A multi-stage `Dockerfile` builds the JAR with `gradle:jdk25` and runs it on `eclipse-temurin:25-jre`. `docker-compose.yml` orchestrates the app and a PostgreSQL 18 container on a shared Docker-managed network, with the app resolving Postgres by container/service name via Docker's internal DNS rather than `localhost`.
-
-
-## Documentation
-
-- [Spring Boot Documentation](https://spring.io/projects/spring-boot)
-- [Spring Security Guide](https://spring.io/guides/gs/securing-web/)
-- [Spring Data JPA Reference](https://docs.spring.io/spring-data/jpa/reference/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Docker Compose Reference](https://docs.docker.com/compose/)
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Runtime** | Java 25 | Latest OpenJDK runtime features & records |
+| **Framework** | Spring Boot 4.0.6 | REST API framework & auto-configuration |
+| **Security** | Spring Security 7 + JJWT | Stateless JWT authentication & authorization |
+| **ORM / Data** | Spring Data JPA + Hibernate 7 | Persistence abstraction & entity relations |
+| **Database** | PostgreSQL 18 (Aiven Cloud) | Relational database with foreign key constraints |
+| **Migrations** | Flyway 11 | Version-controlled DDL migrations & demo seed data |
+| **API Docs** | Springdoc OpenAPI 3 + Swagger UI | Interactive living API documentation |
+| **Container** | Docker + Docker Compose | Multi-stage containerized deployments |
+| **Cloud** | Render | Managed cloud application hosting |
